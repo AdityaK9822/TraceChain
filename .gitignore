@@ -1,0 +1,20 @@
+# Python / backend
+backend/.venv/
+backend/venv/
+__pycache__/
+*.pyc
+*.egg-info/
+backend/cryptotrace.db
+.pytest_cache/
+
+# Env files
+.env
+.env.local
+
+# Frontend build artifacts (frontend/.gitignore also covers these locally)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# OS
+.DS_Store

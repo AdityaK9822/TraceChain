@@ -1,0 +1,14 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+httpx>=0.27
+python-dotenv>=1.0
+jinja2>=3.1
+pydantic>=2.9
+
+# Dev / testing
+pytest>=8.0
+
+# Optional: enables PDF export of investigation reports.
+# Requires system libs (cairo, pango, gdk-pixbuf) - see docs/data-sources.md.
+# If not installed, /api/report falls back to HTML output.
+# weasyprint==62.3

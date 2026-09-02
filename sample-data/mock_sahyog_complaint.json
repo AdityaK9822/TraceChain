@@ -1,0 +1,16 @@
+{
+  "complaint_id": "NCRP-2026-0417233",
+  "source_system": "mock-sahyog-feed",
+  "received_at": "2026-09-01T06:12:00Z",
+  "victim": {
+    "name": "Redacted",
+    "state": "Maharashtra",
+    "contact_masked": "XXXXXX4821"
+  },
+  "fraud_type": "Investment/Trading Scam",
+  "amount_reported_inr": 480000,
+  "description": "Victim was lured into a fake crypto trading app promising guaranteed returns. Deposited funds were converted to USDT/ETH and transferred out by the scammer to the wallet address below.",
+  "reported_wallet_address": "0xREPLACE_WALLET_A",
+  "chain": "ethereum",
+  "status": "pending_investigation"
+}

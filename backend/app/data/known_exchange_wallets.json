@@ -1,0 +1,37 @@
+[
+  {
+    "address": "0x28C6c06298d514Db089934071355E5743bf21d60",
+    "label": "Binance Hot Wallet",
+    "network": "mainnet",
+    "chain": "ethereum",
+    "source": "public - Etherscan labeled address (reference only, not used in live testnet demo)"
+  },
+  {
+    "address": "0x21a31Ee1afC51d94C2eFcCAa2092aD1028285549",
+    "label": "Binance Hot Wallet 2",
+    "network": "mainnet",
+    "chain": "ethereum",
+    "source": "public - Etherscan labeled address (reference only, not used in live testnet demo)"
+  },
+  {
+    "address": "0x503828976D22510aad0201ac7EC88293211D923",
+    "label": "Coinbase Hot Wallet",
+    "network": "mainnet",
+    "chain": "ethereum",
+    "source": "public - Etherscan labeled address (reference only, not used in live testnet demo)"
+  },
+  {
+    "address": "0x2910543Af39abA0Cd09dBb2D50200b3E800A63D2",
+    "label": "Kraken Hot Wallet",
+    "network": "mainnet",
+    "chain": "ethereum",
+    "source": "public - Etherscan labeled address (reference only, not used in live testnet demo)"
+  },
+  {
+    "address": "0xREPLACE_WITH_DEMO_EXCHANGE_WALLET_1",
+    "label": "Demo Exchange Wallet (Sepolia)",
+    "network": "sepolia",
+    "chain": "ethereum",
+    "source": "self-created for hackathon demo - see docs/data-sources.md"
+  }
+]

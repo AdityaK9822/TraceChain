@@ -1,0 +1,25 @@
+{
+  "note": "Placeholders for the guaranteed live-demo chain. Replace each address with a real, pre-tested Sepolia wallet you control, then send test ETH A -> B -> C -> D (via https://sepoliafaucet.com or a MetaMask test faucet) so the trace has real on-chain data to walk. See docs/data-sources.md for the exact setup steps.",
+  "demo_chain": [
+    {
+      "role": "A - reported wallet (victim's stolen-funds destination)",
+      "address": "0xREPLACE_WALLET_A",
+      "description": "This is the address the mock complaint reports."
+    },
+    {
+      "role": "B - intermediary hop 1",
+      "address": "0xREPLACE_WALLET_B",
+      "description": "A receives funds are forwarded from A to B."
+    },
+    {
+      "role": "C - intermediary hop 2",
+      "address": "0xREPLACE_WALLET_C",
+      "description": "B forwards to C (optional extra hop for a richer graph)."
+    },
+    {
+      "role": "D - exchange deposit wallet",
+      "address": "0xREPLACE_WITH_DEMO_EXCHANGE_WALLET_1",
+      "description": "Must exactly match the 'sepolia' entry in backend/app/data/known_exchange_wallets.json so the system flags it as an exchange deposit."
+    }
+  ]
+}
