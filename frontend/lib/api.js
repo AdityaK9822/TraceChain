@@ -43,3 +43,7 @@ export function listCases() {
 export function reportUrl(caseId, format = "html") {
   return `${API_BASE_URL}/report/${caseId}?format=${format}`;
 }
+
+export function getWalletOverview(walletAddress, network = "sepolia") {
+  return request(`/wallet/${walletAddress}?network=${network}`);
+}

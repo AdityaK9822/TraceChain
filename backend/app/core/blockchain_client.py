@@ -93,3 +93,46 @@ def get_transactions(address: str, network: str | None = None) -> list[dict[str,
     _CACHE[cache_key] = txs
     _CACHE_TIMESTAMPS[cache_key] = time.time()
     return txs
+
+def get_balance(address: str, network: str | None = None) -> float:
+    """Fetch the ETH balance for a wallet address."""
+    network = network or DEFAULT_NETWORK
+    cache_key = f"balance:{network}:{address.lower()}"
+
+    cached = _CACHE.get(cache_key)
+    if cached is not None and (time.time() - _CACHE_TIMESTAMPS[cache_key]) < _CACHE_TTL_SECONDS:
+        return float(cached[0]["value"]) if cached else 0.0
+
+    if not ETHERSCAN_API_KEY:
+        raise BlockchainClientError(
+            "ETHERSCAN_API_KEY is not set. Copy .env.example to .env and add your key."
+        )
+
+    chain_id = CHAIN_IDS.get(network, CHAIN_IDS["sepolia"])
+    params = {
+        "chainid": chain_id,
+        "module": "account",
+        "action": "balance",
+        "address": address,
+        "tag": "latest",
+        "apikey": ETHERSCAN_API_KEY,
+    }
+
+    try:
+        resp = httpx.get(ETHERSCAN_BASE_URL, params=params, timeout=10.0)
+        resp.raise_for_status()
+        payload = resp.json()
+    except httpx.HTTPError as exc:
+        raise BlockchainClientError(f"Etherscan request failed: {exc}") from exc
+
+    if payload.get("status") == "0" and payload.get("message") != "OK":
+        raise BlockchainClientError(f"Etherscan error: {payload.get('result')}")
+
+    wei_balance = int(payload.get("result", 0))
+    eth_balance = wei_balance / 1e18
+
+    # Store in cache as a dummy list to reuse the _CACHE dict type
+    _CACHE[cache_key] = [{"value": eth_balance}]
+    _CACHE_TIMESTAMPS[cache_key] = time.time()
+    
+    return eth_balance

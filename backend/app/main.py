@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
-from app.api import cases, report, trace  # noqa: E402 (needs load_dotenv first)
+from app.api import cases, report, trace, wallet  # noqa: E402 (needs load_dotenv first)
 from app.db import init_db  # noqa: E402
 
 app = FastAPI(
@@ -39,3 +39,5 @@ def health() -> dict:
 app.include_router(trace.router, prefix="/api")
 app.include_router(cases.router, prefix="/api")
 app.include_router(report.router, prefix="/api")
+app.include_router(wallet.router, prefix="/api")
+

@@ -8,24 +8,24 @@ function formatInr(amount) {
 
 export default function ComplaintFeed({ onSelectAddress }) {
   return (
-    <div className="rounded-lg border border-border-subtle bg-bg-panel p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-text-primary">Incoming complaints</h2>
-        <span className="text-xs text-text-secondary">simulated NCRP/SAHYOG feed</span>
+    <div className="rounded-2xl border border-white/10 bg-[#0a0a0a] p-6 shadow-xl">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-white">Incoming complaints</h2>
+        <span className="text-xs text-white/40">simulated NCRP/SAHYOG feed</span>
       </div>
-      <ul className="divide-y divide-border-subtle">
+      <ul className="divide-y divide-white/10">
         {MOCK_COMPLAINTS.map((c) => (
-          <li key={c.complaintId} className="py-3 flex items-start justify-between gap-4">
+          <li key={c.complaintId} className="py-4 flex items-start justify-between gap-4">
             <div>
-              <p className="text-sm text-text-primary font-medium">{c.fraudType}</p>
-              <p className="text-xs text-text-secondary mt-0.5">
+              <p className="text-sm text-white font-medium">{c.fraudType}</p>
+              <p className="text-xs text-white/50 mt-1">
                 {c.complaintId} · {c.state} · {formatInr(c.amountReportedInr)}
               </p>
-              <p className="mono text-xs text-text-secondary mt-1">{c.reportedWalletAddress}</p>
+              <p className="font-mono text-xs text-white/40 mt-2">{c.reportedWalletAddress}</p>
             </div>
             <button
               onClick={() => onSelectAddress?.(c.reportedWalletAddress)}
-              className="shrink-0 rounded-md border border-accent-blue/40 px-3 py-1.5 text-xs font-medium text-accent-blue hover:bg-accent-blue/10"
+              className="shrink-0 rounded-lg border border-rose-500/40 px-4 py-2 text-xs font-medium text-rose-500 hover:bg-rose-500/10 transition-colors shadow-[0_0_10px_rgba(225,29,72,0.1)]"
             >
               Investigate
             </button>
