@@ -20,7 +20,7 @@ async function request(path, options = {}) {
   return res.json();
 }
 
-export function traceWallet({ walletAddress, chain = "ethereum", maxHops = 3, maxBranchesPerHop = 5 }) {
+export function traceWallet({ walletAddress, chain = "ethereum", maxHops = 3, maxBranchesPerHop = 5, direction = "outgoing" }) {
   return request("/trace", {
     method: "POST",
     body: JSON.stringify({
@@ -28,6 +28,7 @@ export function traceWallet({ walletAddress, chain = "ethereum", maxHops = 3, ma
       chain,
       max_hops: maxHops,
       max_branches_per_hop: maxBranchesPerHop,
+      direction,
     }),
   });
 }
@@ -47,3 +48,8 @@ export function reportUrl(caseId, format = "html") {
 export function getWalletOverview(walletAddress, network = "sepolia") {
   return request(`/wallet/${walletAddress}?network=${network}`);
 }
+
+export function getWalletBalance(walletAddress, network = "sepolia") {
+  return request(`/wallet/${walletAddress}/balance?network=${network}`);
+}
+

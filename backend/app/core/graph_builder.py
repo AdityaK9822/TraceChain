@@ -29,6 +29,7 @@ async def trace_wallet_async(
     network: str,
     max_hops: int = 3,
     max_branches_per_hop: int = 5,
+    direction: str = "outgoing",
 ) -> BuiltGraph:
     graph = BuiltGraph()
     seen_nodes: dict[str, dict] = {}
@@ -47,6 +48,8 @@ async def trace_wallet_async(
 
     frontier = [wallet_address]
     visited_as_source: set[str] = set()
+
+    is_incoming = direction == "incoming"
 
     for hop in range(1, max_hops + 1):
         next_frontier: list[str] = []
@@ -72,22 +75,31 @@ async def trace_wallet_async(
         for source, result in zip(active_sources, results):
             if isinstance(result, Exception):
                 continue
-            
             source_key = source.lower()
             txs = result
-            
-            outgoing = [tx for tx in txs if tx["from"].lower() == source_key]
-            outgoing.sort(key=lambda tx: tx["value_eth"], reverse=True)
-            top_txs = outgoing[:max_branches_per_hop]
+
+            if is_incoming:
+                relevant_txs = [tx for tx in txs if tx.get("to") and tx["to"].lower() == source_key]
+            else:
+                relevant_txs = [tx for tx in txs if tx.get("from") and tx["from"].lower() == source_key]
+
+            relevant_txs.sort(key=lambda tx: tx["value_eth"], reverse=True)
+            top_txs = relevant_txs[:max_branches_per_hop]
+
 
             for tx in top_txs:
-                target = tx["to"]
+                target = tx["from"] if is_incoming else tx["to"]
+                if not target:
+                    continue
                 target_key = target.lower()
+
+                edge_src = tx["from"]
+                edge_tgt = tx["to"]
 
                 graph.edges.append(
                     {
-                        "source": source,
-                        "target": target,
+                        "source": edge_src,
+                        "target": edge_tgt,
                         "tx_hash": tx["hash"],
                         "value_eth": tx["value_eth"],
                         "timestamp": tx["timestamp"],
@@ -125,3 +137,4 @@ async def trace_wallet_async(
     graph.nodes = refine_intermediary_tags(list(seen_nodes.values()), graph.edges)
     graph.summary = build_summary(wallet_address, graph.nodes, graph.flagged_exchange, max_hops)
     return graph
+

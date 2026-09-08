@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -10,6 +10,7 @@ class TraceRequest(BaseModel):
     chain: str = "ethereum"
     max_hops: int = Field(default=3, ge=1, le=4)
     max_branches_per_hop: int = Field(default=5, ge=1, le=15)
+    direction: Literal["outgoing", "incoming"] = "outgoing"
 
 
 class TraceResult(BaseModel):
