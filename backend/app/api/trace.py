@@ -30,9 +30,11 @@ async def create_trace(request: TraceRequest) -> TraceResult:
             network=network,
             max_hops=request.max_hops,
             max_branches_per_hop=request.max_branches_per_hop,
+            direction=request.direction,
         )
     except BlockchainClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
 
     case_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
