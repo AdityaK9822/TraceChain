@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 
 from app.core.blockchain_client import ETHERSCAN_API_KEY, BlockchainClientError
-from app.core.graph_builder import trace_wallet
+from app.core.graph_builder import trace_wallet_async
 from app.db import save_case
 from app.models.case import TraceRequest, TraceResult
 
@@ -12,7 +12,7 @@ router = APIRouter()
 
 
 @router.post("/trace", response_model=TraceResult)
-def create_trace(request: TraceRequest) -> TraceResult:
+async def create_trace(request: TraceRequest) -> TraceResult:
     if not request.wallet_address.startswith("0x") or len(request.wallet_address) != 42:
         raise HTTPException(status_code=400, detail="wallet_address must be a valid 0x-prefixed Ethereum address")
 
@@ -25,7 +25,7 @@ def create_trace(request: TraceRequest) -> TraceResult:
     network = "sepolia" if request.chain in ("ethereum", "sepolia") else request.chain
 
     try:
-        graph = trace_wallet(
+        graph = await trace_wallet_async(
             wallet_address=request.wallet_address,
             network=network,
             max_hops=request.max_hops,

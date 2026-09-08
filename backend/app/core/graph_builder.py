@@ -8,10 +8,11 @@ a known exchange wallet is flagged and not expanded further - the money has
 left the traceable chain.
 """
 
+import asyncio
 from dataclasses import dataclass, field
 
 from app.core import exchange_matcher
-from app.core.blockchain_client import get_transactions
+from app.core.blockchain_client import get_transactions_async
 from app.core.risk_engine import build_summary, classify_node, refine_intermediary_tags
 
 
@@ -23,7 +24,7 @@ class BuiltGraph:
     summary: str = ""
 
 
-def trace_wallet(
+async def trace_wallet_async(
     wallet_address: str,
     network: str,
     max_hops: int = 3,
@@ -37,6 +38,7 @@ def trace_wallet(
         "id": wallet_address,
         "hop": 0,
         "risk_tag": "reported",
+        "risk_score": 100,
         "label": None,
         "exchange_network": None,
         "tx_count": 0,
@@ -48,23 +50,32 @@ def trace_wallet(
 
     for hop in range(1, max_hops + 1):
         next_frontier: list[str] = []
-
+        
+        # Filter frontier: only nodes we haven't expanded and aren't exchanges
+        active_sources = []
         for source in frontier:
             source_key = source.lower()
             if source_key in visited_as_source:
                 continue
-            visited_as_source.add(source_key)
-
-            # An exchange deposit is a terminal node - funds are out of our
-            # visibility once they hit a custodial wallet.
             if seen_nodes[source_key]["risk_tag"] == "exchange":
                 continue
+            active_sources.append(source)
+            visited_as_source.add(source_key)
 
-            try:
-                txs = get_transactions(source, network=network)
-            except Exception:
+        if not active_sources:
+            break
+
+        # Fetch all transactions concurrently
+        fetch_tasks = [get_transactions_async(src, network=network) for src in active_sources]
+        results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+
+        for source, result in zip(active_sources, results):
+            if isinstance(result, Exception):
                 continue
-
+            
+            source_key = source.lower()
+            txs = result
+            
             outgoing = [tx for tx in txs if tx["from"].lower() == source_key]
             outgoing.sort(key=lambda tx: tx["value_eth"], reverse=True)
             top_txs = outgoing[:max_branches_per_hop]
@@ -90,6 +101,7 @@ def trace_wallet(
                         "id": target,
                         "hop": hop,
                         "risk_tag": "unknown",
+                        "risk_score": 50,
                         "label": exchange["label"] if exchange else None,
                         "exchange_network": exchange["network"] if exchange else None,
                         "tx_count": 0,
