@@ -6,7 +6,7 @@ import DashboardShell from "../../../components/Dashboard/DashboardShell";
 import FundFlowGraph from "../../../components/FundFlowGraph/FundFlowGraph";
 import RiskBadge from "../../../components/RiskBadge/RiskBadge";
 import NodeInspector from "../../../components/NodeInspector/NodeInspector";
-import { getCase, traceWallet } from "../../../lib/api";
+import { getCase, traceWallet, expandWalletNode } from "../../../lib/api";
 
 function shortAddr(addr) {
   if (!addr) return "";
@@ -21,6 +21,7 @@ export default function CaseDetailPage() {
   const [exchangeAlert, setExchangeAlert] = useState(null);
   const [selectedElement, setSelectedElement] = useState(null);
   const [tracingLoading, setTracingLoading] = useState(false);
+  const [expandingNodeIds, setExpandingNodeIds] = useState([]);
 
   useEffect(() => {
     getCase(caseId)
@@ -43,6 +44,55 @@ export default function CaseDetailPage() {
 
   const handleSelectEdge = (edge) => {
     setSelectedElement({ type: "edge", data: edge });
+  };
+
+  const handleExpandNode = async (node) => {
+    const walletAddress = node.id;
+    if (!walletAddress || expandingNodeIds.some((id) => id.toLowerCase() === walletAddress.toLowerCase())) return;
+
+    // Terminal exchange nodes do not expand further
+    if (node.risk_tag === "exchange") {
+      return;
+    }
+
+    setExpandingNodeIds((prev) => [...prev, walletAddress]);
+
+    try {
+      const res = await expandWalletNode({
+        walletAddress,
+        hop: node.hop || 0,
+        network: caseData?.chain === "ethereum-mainnet" ? "mainnet" : "sepolia",
+        maxBranches: 5,
+        direction: "outgoing",
+      });
+
+      if (res && res.nodes) {
+        setCaseData((prev) => {
+          if (!prev) return prev;
+          const existingNodeIds = new Set(prev.nodes.map((n) => n.id.toLowerCase()));
+          const existingEdgeHashes = new Set(prev.edges.map((e) => (e.tx_hash || "").toLowerCase()));
+
+          const newNodes = res.nodes.filter((n) => !existingNodeIds.has(n.id.toLowerCase()));
+          const newEdges = res.edges.filter((e) => !existingEdgeHashes.has((e.tx_hash || "").toLowerCase()));
+
+          const updatedExchange = prev.flagged_exchange || res.flagged_exchange;
+          if (res.flagged_exchange && !exchangeAlert) {
+            setExchangeAlert(res.flagged_exchange);
+          }
+
+          return {
+            ...prev,
+            nodes: [...prev.nodes, ...newNodes],
+            edges: [...prev.edges, ...newEdges],
+            flagged_exchange: updatedExchange,
+          };
+        });
+      }
+    } catch (err) {
+      console.error("Failed to expand node:", err);
+    } finally {
+      setExpandingNodeIds((prev) => prev.filter((id) => id.toLowerCase() !== walletAddress.toLowerCase()));
+    }
   };
 
   const handleDirectionalTrace = async ({ walletAddress, direction }) => {
@@ -124,13 +174,16 @@ export default function CaseDetailPage() {
               edges={caseData.edges}
               onExchangeRevealed={setExchangeAlert}
               selectedItem={selectedElement}
+              expandingNodeIds={expandingNodeIds}
               onNodeClick={handleSelectNode}
+              onExpandNode={handleExpandNode}
               onLinkClick={handleSelectEdge}
               onBackgroundClick={() => setSelectedElement(null)}
             />
 
-            <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 text-xs text-white/60 pointer-events-none">
-              Click any node or link to open Inspector Sidebar
+            <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 text-xs text-white/60 pointer-events-none flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" />
+              <span>Click any node to expand next hop & inspect</span>
             </div>
           </div>
 
@@ -140,8 +193,11 @@ export default function CaseDetailPage() {
             onClose={() => setSelectedElement(null)}
             onTraceDirection={handleDirectionalTrace}
             onSelectNode={handleSelectNode}
+            onExpandNode={handleExpandNode}
+            expandingNodeIds={expandingNodeIds}
             network={caseData.chain === "ethereum-mainnet" ? "mainnet" : "sepolia"}
           />
+
 
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="rounded-2xl border border-[#232c3d] bg-[#10151f] p-5 shadow-xl">

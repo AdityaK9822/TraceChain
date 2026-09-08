@@ -41,8 +41,11 @@ export default function NodeInspector({
   onClose,
   onTraceDirection, // ({ walletAddress, direction }) => void
   onSelectNode, // (node) => void
+  onExpandNode, // (node) => void
+  expandingNodeIds = [],
   network = "sepolia",
 }) {
+
   const [copiedKey, setCopiedKey] = useState(null);
   const [balance, setBalance] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
@@ -52,6 +55,8 @@ export default function NodeInspector({
   const isEdge = selectedItem?.type === "edge";
   const node = isNode ? selectedItem.data : null;
   const edge = isEdge ? selectedItem.data : null;
+  const isExpanding = isNode && Boolean(node?.id && expandingNodeIds.some((id) => id.toLowerCase() === node.id.toLowerCase()));
+
 
   // Handle live balance fetch when node changes
   useEffect(() => {
@@ -319,19 +324,53 @@ export default function NodeInspector({
               )}
             </div>
 
-            {/* Directional Tracing Controls */}
+            {/* Directional Tracing & Node Expansion Controls */}
             <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 space-y-3">
-              <h3 className="text-xs font-semibold text-white uppercase tracking-wider">Directional Tracing</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold text-white uppercase tracking-wider">Hop Expansion & Trace</h3>
+                {isExpanding && (
+                  <span className="text-[10px] text-blue-400 font-mono animate-pulse flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400" /> Expanding...
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-white/50 leading-relaxed">
-                Manually control the hop expansion direction from this wallet node.
+                Expand connected counterparty hops or trace fund flows in either direction.
               </p>
+
+              {/* Direct Next Hop Expansion */}
+              {node.risk_tag !== "exchange" ? (
+                <button
+                  onClick={() => onExpandNode?.(node)}
+                  disabled={isExpanding}
+                  className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-semibold text-xs transition-all shadow-[0_0_15px_rgba(59,130,246,0.3)] hover:scale-[1.02] active:scale-98 flex items-center justify-center gap-2"
+                >
+                  {isExpanding ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Expanding Hop {node.hop + 1}...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span>Expand Next Hop (+ Hop {node.hop + 1})</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <div className="p-2.5 rounded-lg bg-accent-red/10 border border-accent-red/20 text-[11px] text-rose-300">
+                  ⚠️ Terminal exchange node — fund flow exited public chain into centralized exchange.
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                 <button
                   onClick={() => onTraceDirection?.({ walletAddress: node.id, direction: "incoming" })}
-                  className="py-2.5 px-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 hover:text-blue-300 border border-blue-500/30 transition-all flex items-center justify-center gap-2 text-xs font-semibold group shadow-sm active:scale-95"
+                  className="py-2 px-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 hover:text-blue-300 border border-blue-500/30 transition-all flex items-center justify-center gap-1.5 text-xs font-semibold group shadow-sm active:scale-95"
                 >
-                  <svg className="w-4 h-4 transform group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5 transform group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
                   </svg>
                   Trace Incoming
@@ -339,15 +378,16 @@ export default function NodeInspector({
 
                 <button
                   onClick={() => onTraceDirection?.({ walletAddress: node.id, direction: "outgoing" })}
-                  className="py-2.5 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 transition-all flex items-center justify-center gap-2 text-xs font-semibold group shadow-sm active:scale-95"
+                  className="py-2 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 transition-all flex items-center justify-center gap-1.5 text-xs font-semibold group shadow-sm active:scale-95"
                 >
                   Trace Outgoing
-                  <svg className="w-4 h-4 transform group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
                   </svg>
                 </button>
               </div>
             </div>
+
           </>
         )}
 

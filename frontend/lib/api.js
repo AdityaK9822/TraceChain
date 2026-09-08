@@ -53,3 +53,17 @@ export function getWalletBalance(walletAddress, network = "sepolia") {
   return request(`/wallet/${walletAddress}/balance?network=${network}`);
 }
 
+export function expandWalletNode({ walletAddress, hop = 0, network = "sepolia", maxBranches = 5, direction = "outgoing" }) {
+  return request("/wallet/expand", {
+    method: "POST",
+    body: JSON.stringify({
+      wallet_address: walletAddress,
+      hop,
+      network,
+      max_branches: maxBranches,
+      direction,
+    }),
+  });
+}
+
+
