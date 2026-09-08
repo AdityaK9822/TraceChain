@@ -17,9 +17,12 @@ INTERMEDIARY_FANOUT_THRESHOLD = 3
 
 def classify_node(node: dict, exchange_match: Optional[dict]) -> str:
     if node.get("hop", 0) == 0:
+        node["risk_score"] = 100
         return "reported"
     if exchange_match is not None:
+        node["risk_score"] = 10
         return "exchange"
+    node["risk_score"] = 50
     return "unknown"
 
 
@@ -39,6 +42,7 @@ def refine_intermediary_tags(nodes: list[dict], edges: list[dict]) -> list[dict]
             continue
         if outgoing_counts.get(node["id"].lower(), 0) >= INTERMEDIARY_FANOUT_THRESHOLD:
             node["risk_tag"] = "intermediary"
+            node["risk_score"] = 80
 
     return nodes
 

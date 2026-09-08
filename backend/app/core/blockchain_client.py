@@ -136,3 +136,58 @@ def get_balance(address: str, network: str | None = None) -> float:
     _CACHE_TIMESTAMPS[cache_key] = time.time()
     
     return eth_balance
+
+async def get_transactions_async(address: str, network: str | None = None) -> list[dict[str, Any]]:
+    """Fetch outgoing + incoming normal transactions for a wallet address concurrently."""
+    network = network or DEFAULT_NETWORK
+    cache_key = f"{network}:{address.lower()}"
+
+    cached = _CACHE.get(cache_key)
+    if cached is not None and (time.time() - _CACHE_TIMESTAMPS[cache_key]) < _CACHE_TTL_SECONDS:
+        return cached
+
+    if not ETHERSCAN_API_KEY:
+        raise BlockchainClientError(
+            "ETHERSCAN_API_KEY is not set. Copy .env.example to .env and add your key."
+        )
+
+    chain_id = CHAIN_IDS.get(network, CHAIN_IDS["sepolia"])
+    params = {
+        "chainid": chain_id,
+        "module": "account",
+        "action": "txlist",
+        "address": address,
+        "startblock": 0,
+        "endblock": 99999999,
+        "sort": "asc",
+        "apikey": ETHERSCAN_API_KEY,
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(ETHERSCAN_BASE_URL, params=params, timeout=10.0)
+            resp.raise_for_status()
+            payload = resp.json()
+    except httpx.HTTPError as exc:
+        raise BlockchainClientError(f"Etherscan request failed: {exc}") from exc
+
+    if payload.get("status") == "0" and payload.get("message") != "No transactions found":
+        raise BlockchainClientError(f"Etherscan error: {payload.get('result')}")
+
+    raw_txs = payload.get("result", []) if isinstance(payload.get("result"), list) else []
+
+    txs = [
+        {
+            "from": tx["from"],
+            "to": tx["to"],
+            "hash": tx["hash"],
+            "value_eth": int(tx["value"]) / 1e18 if tx.get("value") else 0.0,
+            "timestamp": int(tx["timeStamp"]),
+        }
+        for tx in raw_txs
+        if tx.get("to")  # skip contract-creation txs with no `to`
+    ]
+
+    _CACHE[cache_key] = txs
+    _CACHE_TIMESTAMPS[cache_key] = time.time()
+    return txs
