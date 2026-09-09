@@ -46,8 +46,27 @@ def save_case(
     edges: list,
     flagged_exchange: dict | None,
     summary: str,
+    pattern_findings: list | None = None,
+    asset_symbol: str = "ETH",
+    deposit_address: dict | None = None,
+    vasp: dict | None = None,
+    historical: dict | None = None,
+    correlation: dict | None = None,
 ) -> None:
-    graph_json = json.dumps({"nodes": nodes, "edges": edges})
+    # Everything graph-shaped rides in one JSON blob so new analysis fields
+    # never need a schema migration.
+    graph_json = json.dumps(
+        {
+            "nodes": nodes,
+            "edges": edges,
+            "pattern_findings": pattern_findings or [],
+            "asset_symbol": asset_symbol,
+            "deposit_address": deposit_address,
+            "vasp": vasp,
+            "historical": historical,
+            "correlation": correlation,
+        }
+    )
     flagged_json = json.dumps(flagged_exchange) if flagged_exchange else None
     with get_conn() as conn:
         conn.execute(
@@ -102,4 +121,11 @@ def _row_to_case(row: sqlite3.Row) -> dict:
         "flagged_exchange": flagged,
         "summary": row["summary"],
         "status": row["status"],
+        # `.get` keeps cases saved before these fields shipped readable.
+        "pattern_findings": graph.get("pattern_findings", []),
+        "asset_symbol": graph.get("asset_symbol", "ETH"),
+        "deposit_address": graph.get("deposit_address"),
+        "vasp": graph.get("vasp"),
+        "historical": graph.get("historical"),
+        "correlation": graph.get("correlation"),
     }

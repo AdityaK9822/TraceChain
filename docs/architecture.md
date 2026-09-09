@@ -1,18 +1,18 @@
 # Architecture
 
-```
-┌─────────────────┐        POST /api/trace         ┌──────────────────┐        GET account/txlist       ┌───────────────┐
-│  Next.js         │ ──────────────────────────────▶ │  FastAPI backend  │ ──────────────────────────────▶ │ Etherscan API │
-│  (Investigator    │ ◀────────────────────────────── │                    │ ◀────────────────────────────── │ (Sepolia /    │
-│   dashboard)      │   nodes / edges / risk tags      │                    │        transaction list         │  mainnet)     │
-└─────────────────┘                                  └──────────────────┘                                 └───────────────┘
+``` 
+┌─────────────────┐        POST /api/trace          ┌───────────────────┐        GET account/txlist       ┌───────────────┐
+│  Next.js        | ──────────────────────────────▶ │  FastAPI backend  │ ──────────────────────────────▶ │ Etherscan API │
+│  (Investigator  │ ◀────────────────────────────── │                   │ ◀────────────────────────────── │ (Sepolia /    │
+│   dashboard)    │   nodes / edges / risk tags     │                   │        transaction list         │  mainnet)     │
+└─────────────────┘                                 └───────────────────┘                                 └───────────────┘
                                                                 │
                                                                 ▼
-                                                        ┌──────────────┐
-                                                        │   SQLite      │
-                                                        │  (cases, saved │
-                                                        │   graphs)      │
-                                                        └──────────────┘
+                                                        ┌───────────────┐
+                                                        │  SQLite       │
+                                                        │ (cases, saved │
+                                                        │   graphs)     │
+                                                        └───────────────┘
 ```
 
 ## Request flow (`POST /api/trace`)

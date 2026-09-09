@@ -6,8 +6,12 @@ Tags every non-root node as one of:
                      so far) - a common layering pattern to obscure the trail
   - "unknown"       passthrough node, not enough signal either way
 
-This is intentionally simple for the hackathon demo. Real risk scoring
-(clustering heuristics, mixer detection, ML) is roadmap, not v1.
+This module produces the *categorical* tag only. The complementary numeric
+signal - how suspicious a wallet's own behaviour looks - lives in
+`trust_score.py`, and laundering-pattern detection lives in
+`pattern_analyzer.py`. Keeping them separate is deliberate: `risk_tag` says
+how important a node is to the case, `trust_score` says how suspicious it
+looks, and conflating the two is what made the old `risk_score` incoherent.
 """
 
 from typing import Optional
@@ -17,12 +21,9 @@ INTERMEDIARY_FANOUT_THRESHOLD = 3
 
 def classify_node(node: dict, exchange_match: Optional[dict]) -> str:
     if node.get("hop", 0) == 0:
-        node["risk_score"] = 100
         return "reported"
     if exchange_match is not None:
-        node["risk_score"] = 10
         return "exchange"
-    node["risk_score"] = 50
     return "unknown"
 
 
@@ -42,7 +43,6 @@ def refine_intermediary_tags(nodes: list[dict], edges: list[dict]) -> list[dict]
             continue
         if outgoing_counts.get(node["id"].lower(), 0) >= INTERMEDIARY_FANOUT_THRESHOLD:
             node["risk_tag"] = "intermediary"
-            node["risk_score"] = 80
 
     return nodes
 

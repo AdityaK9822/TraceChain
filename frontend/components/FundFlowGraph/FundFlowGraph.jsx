@@ -2,11 +2,18 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { RISK_COLORS } from "../RiskBadge/RiskBadge";
+import { RISK_COLORS, trustScoreColor } from "../RiskBadge/RiskBadge";
 
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
 
 const HOP_REVEAL_MS = 900;
+
+function adjustOpacity(hex, opacity) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${opacity})`;
+}
 
 function shortAddr(addr) {
   if (!addr) return "";
@@ -24,6 +31,9 @@ export default function FundFlowGraph({
   onExpandNode,
   onLinkClick,
   onBackgroundClick,
+  matchedNodeIds = [],
+  variant = "live",
+  onHopRevealed,
 }) {
   const containerRef = useRef(null);
   const graphRef = useRef(null);
@@ -49,6 +59,11 @@ export default function FundFlowGraph({
     return () => timers.forEach(clearTimeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, edges, animate, maxHop]);
+
+  useEffect(() => {
+    if (!onHopRevealed) return;
+    onHopRevealed(visibleHop);
+  }, [visibleHop, onHopRevealed]);
 
   useEffect(() => {
     if (!onExchangeRevealed) return;
@@ -105,7 +120,7 @@ export default function FundFlowGraph({
       nodes: visibleNodes.map((n) => {
         const volume = Number(n.total_value_eth) || 0;
         // Dynamic node value calculation based on transaction volume
-        const val = n.risk_tag === "exchange" ? 14 : n.hop === 0 ? 12 : Math.min(16, Math.max(5, 5 + Math.log10(1 + volume * 10) * 3));
+        const val = n.risk_tag === "exchange" ? 8 : n.hop === 0 ? 7 : Math.min(8, Math.max(3, 3 + Math.log10(1 + volume * 10) * 2));
         return {
           ...n,
           val,
@@ -134,13 +149,22 @@ export default function FundFlowGraph({
         graphData={graphData}
         backgroundColor="transparent"
         nodeId="id"
-        nodeLabel={(n) => `${n.label || shortAddr(n.id)} — ${n.risk_tag} (${(n.total_value_eth || 0).toFixed(4)} ETH)`}
-        nodeColor={(n) => RISK_COLORS[n.risk_tag] || RISK_COLORS.unknown}
-        nodeRelSize={4}
+        nodeLabel={(n) =>
+          `${n.label || shortAddr(n.id)} — ${n.risk_tag} (${(n.total_value_eth || 0).toFixed(4)} ETH)` +
+          (n.trust_score != null ? ` — Trust ${n.trust_score}/100` : "")
+        }
+        nodeColor={(n) => {
+          const baseColor = RISK_COLORS[n.risk_tag] || RISK_COLORS.unknown;
+          if (variant === "historical") {
+            return adjustOpacity(baseColor, 0.4);
+          }
+          return baseColor;
+        }}
+        nodeRelSize={2}
         nodeVal={(n) => n.val || 5}
         linkColor={(link) => {
           const isSelected = selectedLinkHash && link.tx_hash?.toLowerCase() === selectedLinkHash;
-          return isSelected ? "#38bdf8" : "rgba(139, 150, 171, 0.35)";
+          return isSelected ? "#38bdf8" : "rgba(139, 150, 171, 0.7)";
         }}
         linkWidth={(link) => {
           const isSelected = selectedLinkHash && link.tx_hash?.toLowerCase() === selectedLinkHash;
@@ -174,12 +198,16 @@ export default function FundFlowGraph({
           const isSelected = selectedNodeId && node.id?.toLowerCase() === selectedNodeId;
           const isExpanding = expandingSet.has(node.id?.toLowerCase());
           const isExchange = node.risk_tag === "exchange";
+          const isMatched = matchedNodeIds.some(id => id.toLowerCase() === node.id?.toLowerCase());
           const volume = Number(node.total_value_eth) || 0;
 
-          // Dynamic radius scaled by volume
           const baseRadius = node.hop === 0 ? 9 : isExchange ? 10 : 6;
           const radius = Math.min(16, Math.max(5, baseRadius + Math.log10(1 + volume * 10) * 2.5));
-          const nodeColor = RISK_COLORS[node.risk_tag] || RISK_COLORS.unknown;
+          let nodeColor = RISK_COLORS[node.risk_tag] || RISK_COLORS.unknown;
+          
+          if (variant === "historical") {
+            nodeColor = adjustOpacity(nodeColor, 0.4);
+          }
 
           // 1. In-Canvas Visual Loading State: Pulsing and spinning loading ring around expanding node
           if (isExpanding) {
@@ -228,7 +256,29 @@ export default function FundFlowGraph({
             ctx.stroke();
           }
 
-          // 4. Render Node Label Text when zoomed in or focused
+          // 4. Match Ring (purple) - for nodes in correlation
+          if (isMatched && variant === "live") {
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, (radius + 3.2) / globalScale, 0, 2 * Math.PI, false);
+            ctx.strokeStyle = "#a855f7";
+            ctx.lineWidth = 2.0 / globalScale;
+            ctx.shadowColor = "#a855f7";
+            ctx.shadowBlur = 10;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+          }
+
+          // 5. Trust Score Ring - secondary signal, drawn outside the risk_tag
+          // fill colour so the two stay visually distinct
+          if (node.trust_score != null) {
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, (radius + 1.8) / globalScale, 0, 2 * Math.PI, false);
+            ctx.strokeStyle = trustScoreColor(node.trust_score);
+            ctx.lineWidth = 1.6 / globalScale;
+            ctx.stroke();
+          }
+
+          // 6. Render Node Label Text when zoomed in or focused
           if (globalScale > 0.75 || isSelected || isExchange || node.hop === 0) {
             const labelText = node.label || shortAddr(node.id);
             const fontSize = Math.max(10 / globalScale, 3);

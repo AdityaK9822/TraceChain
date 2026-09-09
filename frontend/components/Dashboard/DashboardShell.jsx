@@ -4,22 +4,25 @@ export default function DashboardShell({ children }) {
   return (
     <div className="min-h-screen flex flex-col bg-black text-white font-sans selection:bg-rose-500/30 selection:text-white">
       <header className="border-b border-white/10 bg-black/80 backdrop-blur-md sticky top-0 z-40">
-        <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center hover:opacity-80 transition-opacity">
-            <img src="/TraceChainlogo.png" alt="TraceChain" className="h-8 w-auto" />
-            <span className="text-white/50 font-normal ml-3">LEA</span>
+        <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+            <img src="/TraceChainlogo.png" alt="TraceChain" className="h-7 w-auto" />
+            <span className="text-white/40 font-light tracking-wide">LEA</span>
           </Link>
-          <div className="flex items-center gap-4 text-sm text-white/60">
+          <div className="flex items-center gap-3 text-xs font-medium text-white/40 tracking-wide uppercase">
             <span className="hidden sm:inline">Investigator Console</span>
-            <span className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" title="System online" />
+            <div className="flex items-center gap-2 px-2 py-1 rounded-full bg-white/5 border border-white/10">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" title="System online" />
+              <span className="text-[10px]">Online</span>
+            </div>
           </div>
         </div>
       </header>
-      <main className="flex-1 mx-auto w-full max-w-6xl px-6 py-8">{children}</main>
+      <main className="flex-1 mx-auto w-full max-w-7xl px-6 py-8">{children}</main>
       <footer className="border-t border-white/10 py-6 mt-12 bg-black">
-        <div className="mx-auto max-w-6xl px-6 text-xs text-white/40 flex justify-between">
-          <span>TraceChain LEA — Connected Mode</span>
-          <span>SIH PS 26183 demo build</span>
+        <div className="mx-auto max-w-7xl px-6 text-xs text-white/40 flex justify-between">
+          <span>TraceChain LEA — Real-Time Crypto Fraud Attribution System</span>
+          <span>NCRP Integration • Multi-Chain Forensics</span>
         </div>
       </footer>
     </div>
