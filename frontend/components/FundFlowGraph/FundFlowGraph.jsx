@@ -40,6 +40,8 @@ export default function FundFlowGraph({
   const [dimensions, setDimensions] = useState({ width: 800, height: 480 });
   const [visibleHop, setVisibleHop] = useState(animate ? 0 : Infinity);
   const animFrameRef = useRef(null);
+  const nodePositionsRef = useRef({});
+  const initialZoomDoneRef = useRef(false);
 
   const maxHop = useMemo(() => nodes.reduce((m, n) => Math.max(m, n.hop), 0), [nodes]);
 
@@ -48,7 +50,18 @@ export default function FundFlowGraph({
       setVisibleHop(Infinity);
       return;
     }
-    setVisibleHop(0);
+    
+    // Reset for new trace only when nodes completely change (new trace started)
+    const nodeIds = nodes.map(n => n.id).join(',');
+    const prevNodeIdsRef = useRef(nodeIds);
+    
+    if (prevNodeIdsRef.current !== nodeIds) {
+      prevNodeIdsRef.current = nodeIds;
+      setVisibleHop(0);
+      nodePositionsRef.current = {};
+      initialZoomDoneRef.current = false;
+    }
+    
     if (maxHop === 0) return;
     const timers = [];
     for (let hop = 1; hop <= maxHop; hop++) {
@@ -119,11 +132,17 @@ export default function FundFlowGraph({
     return {
       nodes: visibleNodes.map((n) => {
         const volume = Number(n.total_value_eth) || 0;
-        // Dynamic node value calculation based on transaction volume
         const val = n.risk_tag === "exchange" ? 8 : n.hop === 0 ? 7 : Math.min(8, Math.max(3, 3 + Math.log10(1 + volume * 10) * 2));
+        
+        // Preserve existing positions to prevent vigorous jumping
+        const existingPos = nodePositionsRef.current[n.id.toLowerCase()];
+        
         return {
           ...n,
           val,
+          // Use fixed positions if available, otherwise let force graph compute
+          fx: existingPos?.x,
+          fy: existingPos?.y,
         };
       }),
       links: visibleEdges.map((e) => ({
@@ -179,8 +198,28 @@ export default function FundFlowGraph({
           return isSelected ? 3.5 : 2;
         }}
         linkLabel={(l) => `${l.value_eth.toFixed(5)} ETH (Click for details)`}
-        cooldownTicks={80}
-        onEngineStop={() => graphRef.current?.zoomToFit(400, 60)}
+        cooldownTicks={animate ? 100 : 50}
+        cooldownTime={animate ? 8000 : 3000}
+        d3AlphaDecay={0.02}
+        d3VelocityDecay={0.4}
+        onEngineTick={() => {
+          // Store node positions as they stabilize
+          if (graphRef.current) {
+            const graph = graphRef.current;
+            graph.graphData().nodes.forEach(node => {
+              if (node.x !== undefined && node.y !== undefined) {
+                nodePositionsRef.current[node.id.toLowerCase()] = { x: node.x, y: node.y };
+              }
+            });
+          }
+        }}
+        onEngineStop={() => {
+          // Only zoom to fit once, not on every new node
+          if (!initialZoomDoneRef.current && graphRef.current) {
+            graphRef.current.zoomToFit(400, 60);
+            initialZoomDoneRef.current = true;
+          }
+        }}
         onNodeClick={(node) => {
           onNodeClick?.(node);
           if (onExpandNode && !expandingSet.has(node.id.toLowerCase())) {
