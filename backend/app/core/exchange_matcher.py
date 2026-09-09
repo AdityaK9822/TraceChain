@@ -1,11 +1,14 @@
-"""Matches a wallet address against the curated known-exchange-wallet list."""
+"""Matches a wallet address against known VASP hot wallets.
 
-import json
-from functools import lru_cache
-from pathlib import Path
+Backed by data/vasps.py. A match here means the address IS an exchange's hot
+wallet - the end of the traceable trail. It does NOT mean the address is the
+fraudster's deposit address; that is a separate, more useful inference made in
+core/attribution.py from the sweep *into* one of these wallets.
+"""
+
 from typing import Optional, TypedDict
 
-DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "known_exchange_wallets.json"
+from app.data.vasps import match_hot_wallet
 
 
 class ExchangeMatch(TypedDict):
@@ -13,24 +16,20 @@ class ExchangeMatch(TypedDict):
     label: str
     network: str
     chain: str
-
-
-@lru_cache(maxsize=1)
-def _load_exchange_wallets() -> dict[str, ExchangeMatch]:
-    with open(DATA_PATH) as f:
-        entries = json.load(f)
-    return {entry["address"].lower(): entry for entry in entries}
+    vasp_id: str
 
 
 def match(address: str, network: Optional[str] = None) -> Optional[ExchangeMatch]:
-    """Return the exchange wallet record if `address` is a known exchange wallet.
-
-    If `network` is given, only matches within that network (mainnet/sepolia);
-    otherwise matches across all known networks.
-    """
-    entry = _load_exchange_wallets().get(address.lower())
-    if entry is None:
+    """Return the hot-wallet record if `address` is a known VASP hot wallet."""
+    if not address or not network:
         return None
-    if network and entry.get("network") != network:
+    vasp = match_hot_wallet(address, network)
+    if vasp is None:
         return None
-    return entry
+    return {
+        "address": vasp["hot_wallet"],
+        "label": f"{vasp['name']} Hot Wallet",
+        "network": network,
+        "chain": network,
+        "vasp_id": vasp["vasp_id"],
+    }

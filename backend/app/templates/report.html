@@ -23,6 +23,8 @@
   .tag-intermediary { background: #d6a545; color: #fff; }
   .tag-reported { background: #0b3d91; color: #fff; }
   .tag-unknown { background: #9aa3b2; color: #fff; }
+  .tag-deposit_address { background: #7b2ff7; color: #fff; }
+  .tag-mule { background: #c2410c; color: #fff; }
   .footer { margin-top: 40px; font-size: 11px; color: #888; border-top: 1px solid #e0e4ec; padding-top: 12px; }
   .mono { font-family: "SF Mono", Consolas, monospace; font-size: 11.5px; }
 </style>
@@ -63,7 +65,7 @@
   <h2>Wallets involved ({{ case.nodes|length }})</h2>
   <table>
     <thead>
-      <tr><th>Wallet</th><th>Hop</th><th>Risk tag</th><th>Label</th><th>Tx count</th><th>Total value (ETH)</th></tr>
+      <tr><th>Wallet</th><th>Hop</th><th>Risk tag</th><th>Label</th><th>Tx count</th><th>Total value ({{ case.asset_symbol or "ETH" }})</th></tr>
     </thead>
     <tbody>
       {% for node in case.nodes %}
@@ -73,7 +75,7 @@
         <td><span class="tag tag-{{ node.risk_tag }}">{{ node.risk_tag }}</span></td>
         <td>{{ node.label or "—" }}</td>
         <td>{{ node.tx_count }}</td>
-        <td>{{ "%.5f"|format(node.total_value_eth) }}</td>
+        <td>{{ "%.5f"|format(node.total_value_eth or 0) }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -82,7 +84,7 @@
   <h2>Transaction hops ({{ case.edges|length }})</h2>
   <table>
     <thead>
-      <tr><th>Hop</th><th>From</th><th>To</th><th>Value (ETH)</th><th>Tx hash</th></tr>
+      <tr><th>Hop</th><th>From</th><th>To</th><th>Value ({{ case.asset_symbol or "ETH" }})</th><th>Tx hash</th></tr>
     </thead>
     <tbody>
       {% for edge in case.edges %}
@@ -90,7 +92,7 @@
         <td>{{ edge.hop }}</td>
         <td class="mono">{{ edge.source }}</td>
         <td class="mono">{{ edge.target }}</td>
-        <td>{{ "%.5f"|format(edge.value_eth) }}</td>
+        <td>{{ "%.5f"|format(edge.value_eth or 0) }}</td>
         <td class="mono">{{ edge.tx_hash }}</td>
       </tr>
       {% endfor %}

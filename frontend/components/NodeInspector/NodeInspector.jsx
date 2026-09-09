@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import RiskBadge, { RISK_COLORS } from "../RiskBadge/RiskBadge";
+import RiskBadge, { RISK_COLORS, trustScoreColor } from "../RiskBadge/RiskBadge";
 import { getWalletBalance } from "../../lib/api";
+import { explorerAddressUrl, explorerTxUrl, chainSymbol } from "../../lib/chains";
 
 function shortAddr(addr) {
   if (!addr) return "";
@@ -22,6 +23,18 @@ const RISK_EXPLANATIONS = {
     severity: "High Priority / Terminal",
     severityColor: "text-accent-red bg-accent-red/10 border-accent-red/30",
   },
+  deposit_address: {
+    title: "VASP Deposit Address",
+    description: "Identified as the exchange deposit address where funds were swept. Serve KYC request to VASP for account holder details.",
+    severity: "Critical / Actionable",
+    severityColor: "text-purple-400 bg-purple-500/10 border-purple-500/30",
+  },
+  mule: {
+    title: "Laundering Mule Wallet",
+    description: "Wallet exhibits laundering behavior: short lifespan, single-purpose transfers, no genuine activity history.",
+    severity: "High Risk",
+    severityColor: "text-orange-400 bg-orange-500/10 border-orange-500/30",
+  },
   intermediary: {
     title: "High Fan-Out Intermediary",
     description: "Multiple distinct counterparty transactions detected (≥3 outgoing branches), indicating rapid dispersal or layering behavior.",
@@ -37,13 +50,14 @@ const RISK_EXPLANATIONS = {
 };
 
 export default function NodeInspector({
-  selectedItem, // { type: 'node', data: node } or { type: 'edge', data: edge }
+  selectedItem,
   onClose,
-  onTraceDirection, // ({ walletAddress, direction }) => void
-  onSelectNode, // (node) => void
-  onExpandNode, // (node) => void
+  onTraceDirection,
+  onSelectNode,
+  onExpandNode,
   expandingNodeIds = [],
-  network = "sepolia",
+  network = "ethereum",
+  chain = "ethereum",
 }) {
 
   const [copiedKey, setCopiedKey] = useState(null);
@@ -112,8 +126,7 @@ export default function NodeInspector({
     return null;
   }
 
-  const explorerBase = network === "mainnet" ? "https://etherscan.io" : "https://sepolia.etherscan.io";
-  const ethPrice = 2400; // Estimated USD value per ETH for demonstration
+  const assetSymbol = chainSymbol(chain);
 
   return (
     <aside
@@ -195,38 +208,38 @@ export default function NodeInspector({
                 </button>
 
                 <a
-                  href={`${explorerBase}/address/${node.id}`}
+                  href={explorerAddressUrl(node.id, chain)}
                   target="_blank"
                   rel="noreferrer"
                   className="py-1.5 px-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white/80 hover:text-white transition-colors flex items-center justify-center gap-1.5 font-medium"
-                  title="View on Etherscan"
+                  title="View on explorer"
                 >
                   <svg className="w-3.5 h-3.5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
-                  <span>Etherscan</span>
+                  <span>Explorer</span>
                 </a>
               </div>
             </div>
 
-            {/* Live ETH Balance Card */}
+            {/* Live Balance Card */}
             <div className="p-4 rounded-xl bg-gradient-to-br from-blue-950/30 to-black/40 border border-blue-500/20 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
 
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">Live ETH Balance</span>
+                  <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">Live {assetSymbol} Balance</span>
                 </div>
                 <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                  {network}
+                  {chain}
                 </span>
               </div>
 
               {balanceLoading ? (
                 <div className="py-3 flex items-center gap-3">
                   <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-xs text-white/60">Fetching live Etherscan balance...</span>
+                  <span className="text-xs text-white/60">Fetching balance...</span>
                 </div>
               ) : balanceError ? (
                 <div className="py-2">
@@ -238,14 +251,7 @@ export default function NodeInspector({
                     <span className="text-2xl font-bold text-white tracking-tight">
                       {typeof balance === "number" ? balance.toFixed(5) : "0.00000"}
                     </span>
-                    <span className="text-sm font-semibold text-blue-400">ETH</span>
-                  </div>
-                  <div className="text-xs text-white/50">
-                    ≈{" "}
-                    {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
-                      (balance || 0) * ethPrice
-                    )}{" "}
-                    <span className="text-[10px] text-white/30">(est. @ ${ethPrice})</span>
+                    <span className="text-sm font-semibold text-blue-400">{assetSymbol}</span>
                   </div>
                 </div>
               )}
@@ -276,9 +282,32 @@ export default function NodeInspector({
                 </div>
                 <div className="p-2 rounded-lg bg-black/30 border border-white/5">
                   <span className="text-white/40 block text-[10px] uppercase">Traced Volume</span>
-                  <span className="font-semibold text-white">{node.total_value_eth?.toFixed(4) || "0.0000"} ETH</span>
+                  <span className="font-semibold text-white">{node.total_value_eth?.toFixed(4) || "0.0000"} {assetSymbol}</span>
                 </div>
+                {node.trust_score != null && (
+                  <div className="p-2 rounded-lg bg-black/30 border border-white/5">
+                    <span className="text-white/40 block text-[10px] uppercase">Trust Score</span>
+                    <span className="font-semibold" style={{ color: trustScoreColor(node.trust_score) }}>
+                      {node.trust_score}/100
+                    </span>
+                  </div>
+                )}
+                {node.hops_to_nearest_exchange != null && (
+                  <div className="p-2 rounded-lg bg-black/30 border border-white/5">
+                    <span className="text-white/40 block text-[10px] uppercase">Hops to Exchange</span>
+                    <span className="font-semibold text-white">
+                      {node.hops_to_nearest_exchange === 0
+                        ? "This wallet"
+                        : `${node.hops_to_nearest_exchange} hop${node.hops_to_nearest_exchange === 1 ? "" : "s"}`}
+                    </span>
+                  </div>
+                )}
               </div>
+
+              <p className="text-[10px] text-white/30 leading-relaxed pt-1">
+                Trust score rates how suspicious this wallet&apos;s own behaviour looks (100 = least
+                suspicious) — separate from its risk classification above.
+              </p>
             </div>
 
             {/* Known Entity Information (Issue 2) */}
@@ -401,15 +430,8 @@ export default function NodeInspector({
                 <span className="text-3xl font-bold text-white tracking-tight">
                   {edge.value_eth ? edge.value_eth.toFixed(5) : "0.00000"}
                 </span>
-                <span className="text-sm font-semibold text-indigo-400">ETH</span>
+                <span className="text-sm font-semibold text-indigo-400">{assetSymbol}</span>
               </div>
-              <p className="text-xs text-white/50">
-                ≈{" "}
-                {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
-                  (edge.value_eth || 0) * ethPrice
-                )}{" "}
-                USD at timestamp
-              </p>
             </div>
 
             {/* Hop Metadata Card */}
@@ -449,7 +471,7 @@ export default function NodeInspector({
                       )}
                     </button>
                     <a
-                      href={`${explorerBase}/tx/${edge.tx_hash}`}
+                      href={explorerTxUrl(edge.tx_hash, chain)}
                       target="_blank"
                       rel="noreferrer"
                       className="py-1 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white/80 hover:text-white transition-colors flex items-center justify-center gap-1 font-medium"

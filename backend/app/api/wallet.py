@@ -9,6 +9,7 @@ from app.core.blockchain_client import (
     get_transactions_async,
     BlockchainClientError,
 )
+from app.core.chains import DEFAULT_CHAIN, validate_address
 from app.core.risk_engine import classify_node
 
 router = APIRouter()
@@ -17,15 +18,15 @@ router = APIRouter()
 class ExpandNodeRequest(BaseModel):
     wallet_address: str
     hop: int = 0
-    network: str = "sepolia"
+    network: str = DEFAULT_CHAIN
     max_branches: int = Field(default=5, ge=1, le=15)
     direction: Literal["outgoing", "incoming"] = "outgoing"
 
 
 @router.get("/wallet/{address}")
-def get_wallet_overview(address: str, network: str = "sepolia") -> dict[str, Any]:
-    if not address.startswith("0x") or len(address) != 42:
-        raise HTTPException(status_code=400, detail="Invalid wallet address")
+def get_wallet_overview(address: str, network: str = DEFAULT_CHAIN) -> dict[str, Any]:
+    if not validate_address(address, network):
+        raise HTTPException(status_code=400, detail=f"Invalid {network} address")
 
     try:
         balance = get_balance(address, network)
@@ -45,9 +46,9 @@ def get_wallet_overview(address: str, network: str = "sepolia") -> dict[str, Any
 
 
 @router.get("/wallet/{address}/balance")
-def get_wallet_balance(address: str, network: str = "sepolia") -> dict[str, Any]:
-    if not address.startswith("0x") or len(address) != 42:
-        raise HTTPException(status_code=400, detail="Invalid wallet address")
+def get_wallet_balance(address: str, network: str = DEFAULT_CHAIN) -> dict[str, Any]:
+    if not validate_address(address, network):
+        raise HTTPException(status_code=400, detail=f"Invalid {network} address")
 
     try:
         balance = get_balance(address, network)
@@ -63,8 +64,10 @@ def get_wallet_balance(address: str, network: str = "sepolia") -> dict[str, Any]
 
 @router.post("/wallet/expand")
 async def expand_node(request: ExpandNodeRequest) -> dict[str, Any]:
-    if not request.wallet_address.startswith("0x") or len(request.wallet_address) != 42:
-        raise HTTPException(status_code=400, detail="Invalid wallet address")
+    if not validate_address(request.wallet_address, request.network):
+        raise HTTPException(
+            status_code=400, detail=f"Invalid {request.network} address"
+        )
 
     source_key = request.wallet_address.lower()
     next_hop = request.hop + 1
@@ -115,7 +118,6 @@ async def expand_node(request: ExpandNodeRequest) -> dict[str, Any]:
                 "id": target,
                 "hop": next_hop,
                 "risk_tag": "unknown",
-                "risk_score": 50,
                 "label": exchange["label"] if exchange else None,
                 "exchange_network": exchange["network"] if exchange else None,
                 "tx_count": 1,

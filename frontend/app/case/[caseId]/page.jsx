@@ -4,9 +4,14 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import DashboardShell from "../../../components/Dashboard/DashboardShell";
 import FundFlowGraph from "../../../components/FundFlowGraph/FundFlowGraph";
-import RiskBadge from "../../../components/RiskBadge/RiskBadge";
+import RiskBadge, { TrustScoreBadge } from "../../../components/RiskBadge/RiskBadge";
 import NodeInspector from "../../../components/NodeInspector/NodeInspector";
-import { getCase, traceWallet, expandWalletNode } from "../../../lib/api";
+import PatternAnalysis from "../../../components/PatternAnalysis/PatternAnalysis";
+import LiveScoringPanel from "../../../components/LiveScoring/LiveScoringPanel";
+import DepositAddressBanner from "../../../components/DepositAddress/DepositAddressBanner";
+import CorrelationPanel from "../../../components/Correlation/CorrelationPanel";
+import ChainBadge from "../../../components/ChainBadge/ChainBadge";
+import { traceWalletStream } from "../../../lib/api";
 
 function shortAddr(addr) {
   if (!addr) return "";
@@ -16,29 +21,146 @@ function shortAddr(addr) {
 export default function CaseDetailPage() {
   const { caseId } = useParams();
   const router = useRouter();
-  const [caseData, setCaseData] = useState(null);
-  const [error, setError] = useState("");
-  const [exchangeAlert, setExchangeAlert] = useState(null);
   const [selectedElement, setSelectedElement] = useState(null);
-  const [tracingLoading, setTracingLoading] = useState(false);
-  const [expandingNodeIds, setExpandingNodeIds] = useState([]);
+  
+  // Progressive state for streaming data
+  const [status, setStatus] = useState("Initializing...");
+  const [chain, setChain] = useState("ethereum");
+  const [assetSymbol, setAssetSymbol] = useState("ETH");
+  const [createdAt, setCreatedAt] = useState("");
+  const [walletAddress, setWalletAddress] = useState("");
+  const [summary, setSummary] = useState("");
+  
+  // Historical graph data
+  const [historicalNodes, setHistoricalNodes] = useState([]);
+  const [historicalEdges, setHistoricalEdges] = useState([]);
+  const [historicalDeposit, setHistoricalDeposit] = useState(null);
+  const [historicalCaseLabel, setHistoricalCaseLabel] = useState("");
+  
+  // Live graph data
+  const [liveNodes, setLiveNodes] = useState([]);
+  const [liveEdges, setLiveEdges] = useState([]);
+  
+  // Correlation
+  const [correlation, setCorrelation] = useState(null);
+  
+  // Deposit addresses
+  const [predictedDeposit, setPredictedDeposit] = useState(null);
+  const [confirmedDeposit, setConfirmedDeposit] = useState(null);
+  
+  // Pattern findings
+  const [patternFindings, setPatternFindings] = useState([]);
+  
+  // Revealed nodes for live scoring
+  const [revealedHop, setRevealedHop] = useState(0);
 
   useEffect(() => {
-    getCase(caseId)
-      .then((data) => {
-        setCaseData(data);
-        // Default select the root node if available
-        const rootNode = data?.nodes?.find((n) => n.hop === 0) || data?.nodes?.[0];
-        if (rootNode) {
-          setSelectedElement({ type: "node", data: rootNode });
+    const searchParams = new URLSearchParams(window.location.search);
+    const address = searchParams.get('address');
+    const chain = searchParams.get('chain') || 'ethereum';
+
+    if (!address) {
+      router.push('/');
+      return;
+    }
+
+    setStatus("Initializing trace...");
+
+    const abortController = new AbortController();
+
+    traceWalletStream({
+      walletAddress: address,
+      chain,
+      signal: abortController.signal,
+      onEvent: handleTraceEvent,
+    }).catch(err => {
+      console.error("Stream error:", err);
+      if (err.name !== 'AbortError') {
+        setStatus("Trace complete");
+      }
+    });
+
+    return () => {
+      abortController.abort();
+    };
+  }, [caseId, router]);
+
+  const handleTraceEvent = (event) => {
+    switch (event.event) {
+      case 'init':
+        setChain(event.chain);
+        setCreatedAt(event.created_at);
+        setStatus("Loading...");
+        break;
+        
+      case 'status':
+        setStatus(event.message);
+        break;
+        
+      case 'historical_node':
+        setHistoricalNodes(prev => [...prev, event.node]);
+        break;
+      
+      case 'historical_edge':
+        setHistoricalEdges(prev => [...prev, event.edge]);
+        break;
+      
+      case 'historical_deposit':
+        setHistoricalDeposit(event.deposit);
+        // Show prediction banner
+        setPredictedDeposit({
+          address: event.deposit.address,
+          vasp: event.deposit.vasp,
+          confidence: 0.85, // Will be updated by correlation
+        });
+        break;
+      
+      case 'historical_complete':
+        setHistoricalCaseLabel(event.case_label);
+        break;
+      
+      case 'live_node':
+        setLiveNodes(prev => [...prev, event.node]);
+        setRevealedHop(event.node.hop);
+        setWalletAddress(prev => prev || event.node.id); // Set on first node
+        break;
+      
+      case 'live_edge':
+        setLiveEdges(prev => [...prev, event.edge]);
+        break;
+      
+      case 'correlation':
+        setCorrelation(event.data);
+        // Update prediction with actual correlation data
+        if (event.data.predicted_deposit_address) {
+          setPredictedDeposit({
+            address: event.data.predicted_deposit_address,
+            vasp: event.data.predicted_vasp,
+            confidence: event.data.confidence,
+            rationale: event.data.rationale,
+          });
         }
-      })
-      .catch((err) => setError(err.message || "Failed to load case."));
-  }, [caseId]);
+        break;
+      
+      case 'deposit_found':
+        setConfirmedDeposit(event.deposit);
+        setPredictedDeposit(null); // Hide prediction banner
+        break;
+      
+      case 'patterns':
+        setPatternFindings(event.findings);
+        break;
+      
+      case 'complete':
+        setSummary(event.summary);
+        setAssetSymbol(event.asset_symbol);
+        setStatus("Trace complete");
+        break;
+    }
+  };
 
   const handleSelectNode = (node) => {
-    // Find node in caseData if only partial data provided
-    const fullNode = caseData?.nodes?.find((n) => n.id.toLowerCase() === (node.id || node).toLowerCase()) || node;
+    const fullNode = liveNodes.find((n) => n.id.toLowerCase() === (node.id || node).toLowerCase()) || node;
     setSelectedElement({ type: "node", data: fullNode });
   };
 
@@ -46,205 +168,184 @@ export default function CaseDetailPage() {
     setSelectedElement({ type: "edge", data: edge });
   };
 
-  const handleExpandNode = async (node) => {
-    const walletAddress = node.id;
-    if (!walletAddress || expandingNodeIds.some((id) => id.toLowerCase() === walletAddress.toLowerCase())) return;
-
-    // Terminal exchange nodes do not expand further
-    if (node.risk_tag === "exchange") {
-      return;
-    }
-
-    setExpandingNodeIds((prev) => [...prev, walletAddress]);
-
-    try {
-      const res = await expandWalletNode({
-        walletAddress,
-        hop: node.hop || 0,
-        network: caseData?.chain === "ethereum-mainnet" ? "mainnet" : "sepolia",
-        maxBranches: 5,
-        direction: "outgoing",
-      });
-
-      if (res && res.nodes) {
-        setCaseData((prev) => {
-          if (!prev) return prev;
-          const existingNodeIds = new Set(prev.nodes.map((n) => n.id.toLowerCase()));
-          const existingEdgeHashes = new Set(prev.edges.map((e) => (e.tx_hash || "").toLowerCase()));
-
-          const newNodes = res.nodes.filter((n) => !existingNodeIds.has(n.id.toLowerCase()));
-          const newEdges = res.edges.filter((e) => !existingEdgeHashes.has((e.tx_hash || "").toLowerCase()));
-
-          const updatedExchange = prev.flagged_exchange || res.flagged_exchange;
-          if (res.flagged_exchange && !exchangeAlert) {
-            setExchangeAlert(res.flagged_exchange);
-          }
-
-          return {
-            ...prev,
-            nodes: [...prev.nodes, ...newNodes],
-            edges: [...prev.edges, ...newEdges],
-            flagged_exchange: updatedExchange,
-          };
-        });
-      }
-    } catch (err) {
-      console.error("Failed to expand node:", err);
-    } finally {
-      setExpandingNodeIds((prev) => prev.filter((id) => id.toLowerCase() !== walletAddress.toLowerCase()));
-    }
+  const handleHopRevealed = (hop) => {
+    // Already handled by live_node events
   };
 
-  const handleDirectionalTrace = async ({ walletAddress, direction }) => {
-    setTracingLoading(true);
-    setError("");
-    try {
-      const result = await traceWallet({
-        walletAddress,
-        direction,
-        maxHops: 3,
-        maxBranchesPerHop: 5,
-      });
-      router.push(`/case/${result.case_id}`);
-    } catch (err) {
-      setError(err.message || `Failed to trace ${direction} funds for this wallet.`);
-    } finally {
-      setTracingLoading(false);
-    }
-  };
+  const matchedNodeIds = correlation?.shared_wallets?.map(w => w.address) || [];
+
+  const shouldShowPredictedBanner = predictedDeposit && !confirmedDeposit;
+  const shouldShowConfirmedBanner = confirmedDeposit;
 
   return (
     <DashboardShell>
-      {error && (
-        <div className="rounded-xl border border-accent-red/40 bg-accent-red/10 px-4 py-3 text-sm text-accent-red mb-6 animate-in fade-in">
-          {error}
+
+      {/* Status Banner */}
+      {status && status !== "Trace complete" && (
+        <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-400 mb-6 animate-in fade-in flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+          {status}
         </div>
       )}
 
-      {tracingLoading && (
-        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center space-y-4">
-          <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-white text-sm font-medium">Tracing hop-by-hop fund flow...</p>
-        </div>
-      )}
-
-      {caseData && (
-        <>
-          <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="text-xs text-text-secondary uppercase tracking-wide">Case {caseData.case_id.slice(0, 8)}</p>
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                  {caseData.chain || "ethereum"}
-                </span>
-              </div>
-              <h1 className="mono text-xl md:text-2xl font-semibold text-text-primary mt-1">{caseData.wallet_address}</h1>
-              <p className="text-sm text-text-secondary mt-1 max-w-3xl">{caseData.summary}</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => router.push(`/report/${caseData.case_id}`)}
-                className="shrink-0 rounded-xl bg-accent-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-blue-dim transition-all shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:scale-105 active:scale-95"
-              >
-                Generate Report
-              </button>
-            </div>
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <p className="text-xs text-text-secondary uppercase tracking-wide">Case {caseId}</p>
+            <ChainBadge chain={chain} />
           </div>
-
-          {exchangeAlert && (
-            <div className="mb-4 rounded-xl border border-accent-red/40 bg-accent-red/10 px-4 py-3 text-sm text-accent-red flex items-center justify-between gap-2 animate-pulse shadow-[0_0_20px_rgba(239,68,68,0.15)]">
-              <div className="flex items-center gap-2">
-                <span>🚨</span>
-                <span className="font-semibold">Exchange Deposit Detected:</span>
-                <span>{exchangeAlert.label || exchangeAlert.id} ({exchangeAlert.exchange_network || "Sepolia"})</span>
-              </div>
-              <button
-                onClick={() => handleSelectNode(exchangeAlert)}
-                className="text-xs underline hover:text-white font-medium"
-              >
-                Inspect Cashout Hop →
-              </button>
-            </div>
+          <h1 className="mono text-xl md:text-2xl font-semibold text-text-primary">
+            {shortAddr(walletAddress) || "Loading..."}
+          </h1>
+          {summary && (
+            <p className="text-sm text-text-secondary mt-1 max-w-3xl">{summary}</p>
           )}
+        </div>
+        {confirmedDeposit && (
+          <button
+            onClick={() => router.push(`/report/${caseId}`)}
+            className="shrink-0 rounded-xl bg-accent-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-blue-dim transition-all shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:scale-105 active:scale-95"
+          >
+            Generate Report
+          </button>
+        )}
+      </div>
 
-          {/* Interactive Graph Area */}
-          <div className="relative">
-            <FundFlowGraph
-              nodes={caseData.nodes}
-              edges={caseData.edges}
-              onExchangeRevealed={setExchangeAlert}
-              selectedItem={selectedElement}
-              expandingNodeIds={expandingNodeIds}
-              onNodeClick={handleSelectNode}
-              onExpandNode={handleExpandNode}
-              onLinkClick={handleSelectEdge}
-              onBackgroundClick={() => setSelectedElement(null)}
-            />
+      {/* Deposit Address Banners */}
+      {shouldShowPredictedBanner && (
+        <DepositAddressBanner
+          state="predicted"
+          address={predictedDeposit.address}
+          confidence={predictedDeposit.confidence}
+          caseLabel={historicalCaseLabel}
+        />
+      )}
+      {shouldShowConfirmedBanner && (
+        <DepositAddressBanner
+          state="confirmed"
+          address={confirmedDeposit.address}
+          vasp={confirmedDeposit.vasp}
+        />
+      )}
 
-            <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 text-xs text-white/60 pointer-events-none flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" />
-              <span>Click any node to expand next hop & inspect</span>
-            </div>
-          </div>
-
-          {/* Slide-in Node & Edge Inspector Sidebar */}
-          <NodeInspector
+      {/* Dual Graphs */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div>
+          <h3 className="text-sm font-semibold text-text-primary mb-3 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+            Live Trace
+          </h3>
+          <FundFlowGraph
+            nodes={liveNodes}
+            edges={liveEdges}
+            matchedNodeIds={matchedNodeIds}
+            variant="live"
+            animate={false}
+            onHopRevealed={handleHopRevealed}
             selectedItem={selectedElement}
-            onClose={() => setSelectedElement(null)}
-            onTraceDirection={handleDirectionalTrace}
-            onSelectNode={handleSelectNode}
-            onExpandNode={handleExpandNode}
-            expandingNodeIds={expandingNodeIds}
-            network={caseData.chain === "ethereum-mainnet" ? "mainnet" : "sepolia"}
+            onNodeClick={handleSelectNode}
+            onLinkClick={handleSelectEdge}
+            onBackgroundClick={() => setSelectedElement(null)}
           />
-
-
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-2xl border border-[#232c3d] bg-[#10151f] p-5 shadow-xl">
-              <h2 className="text-sm font-semibold text-text-primary mb-3">Risk Classification Legend</h2>
-              <div className="flex flex-wrap gap-2.5">
-                <RiskBadge tag="reported" />
-                <RiskBadge tag="exchange" />
-                <RiskBadge tag="intermediary" />
-                <RiskBadge tag="unknown" />
-              </div>
-              <p className="text-xs text-white/40 mt-3 leading-relaxed">
-                Nodes are tagged based on heuristic analysis: Reported seed origin, Known Exchange VASP cashouts, High fan-out intermediaries, and unclassified counterparties.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-[#232c3d] bg-[#10151f] p-5 shadow-xl">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold text-text-primary">Wallets Traced ({caseData.nodes.length})</h2>
-                <span className="text-xs text-white/40">Click row to inspect</span>
-              </div>
-              <ul className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                {caseData.nodes.map((n) => {
-                  const isSelected = selectedElement?.type === "node" && selectedElement.data?.id?.toLowerCase() === n.id.toLowerCase();
-                  return (
-                    <li
-                      key={n.id}
-                      onClick={() => handleSelectNode(n)}
-                      className={`flex items-center justify-between gap-3 text-sm p-2 rounded-xl transition-all cursor-pointer ${
-                        isSelected
-                          ? "bg-blue-600/20 border border-blue-500/40 text-white"
-                          : "hover:bg-white/5 border border-transparent"
-                      }`}
-                    >
-                      <span className="mono text-text-secondary text-xs truncate">{shortAddr(n.id)}</span>
-                      <div className="flex items-center gap-2">
-                        {n.label && <span className="text-[11px] text-accent-red font-medium truncate max-w-[120px]">{n.label}</span>}
-                        <RiskBadge tag={n.risk_tag} />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+        </div>
+        {historicalNodes.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-text-primary mb-3 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-purple-400" />
+              Historical Path ({historicalCaseLabel})
+            </h3>
+            <FundFlowGraph
+              nodes={historicalNodes}
+              edges={historicalEdges}
+              matchedNodeIds={matchedNodeIds}
+              variant="historical"
+              animate={false}
+            />
           </div>
-        </>
+        )}
+      </div>
+
+      {/* Live Scoring and Correlation */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <LiveScoringPanel
+          nodes={liveNodes.filter(n => n.hop <= revealedHop)}
+          assetSymbol={assetSymbol}
+        />
+        {correlation && (
+          <CorrelationPanel correlation={correlation} />
+        )}
+      </div>
+
+      {/* Pattern Analysis */}
+      {patternFindings.length > 0 && (
+        <div className="mb-6">
+          <PatternAnalysis
+            findings={patternFindings}
+            onSelectNode={handleSelectNode}
+          />
+        </div>
+      )}
+
+      {/* Risk Legend and Wallets List */}
+      {liveNodes.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="rounded-2xl border border-[#232c3d] bg-[#10151f] p-5 shadow-xl">
+            <h2 className="text-sm font-semibold text-text-primary mb-3">Risk Classification Legend</h2>
+            <div className="flex flex-wrap gap-2.5">
+              <RiskBadge tag="reported" />
+              <RiskBadge tag="mule" />
+              <RiskBadge tag="deposit_address" />
+              <RiskBadge tag="exchange" />
+              <RiskBadge tag="intermediary" />
+              <RiskBadge tag="unknown" />
+            </div>
+            <p className="text-xs text-white/40 mt-3 leading-relaxed">
+              Nodes are tagged based on heuristic analysis: Reported seed origin, Identified laundering mules, VASP deposit addresses, Known exchange hot wallets, High fan-out intermediaries.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-[#232c3d] bg-[#10151f] p-5 shadow-xl">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-text-primary">Wallets Traced ({liveNodes.length})</h2>
+              <span className="text-xs text-white/40">Click row to inspect</span>
+            </div>
+            <ul className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+              {liveNodes.map((n) => {
+                const isSelected = selectedElement?.type === "node" && selectedElement.data?.id?.toLowerCase() === n.id.toLowerCase();
+                return (
+                  <li
+                    key={n.id}
+                    onClick={() => handleSelectNode(n)}
+                    className={`flex items-center justify-between gap-3 text-sm p-2 rounded-xl transition-all cursor-pointer ${
+                      isSelected
+                        ? "bg-blue-600/20 border border-blue-500/40 text-white"
+                        : "hover:bg-white/5 border border-transparent"
+                    }`}
+                  >
+                    <span className="mono text-text-secondary text-xs truncate">{shortAddr(n.id)}</span>
+                    <div className="flex items-center gap-2">
+                      {n.label && <span className="text-[11px] text-accent-red font-medium truncate max-w-[120px]">{n.label}</span>}
+                      <TrustScoreBadge score={n.trust_score} />
+                      <RiskBadge tag={n.risk_tag} />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Node Inspector */}
+      {selectedElement && (
+        <NodeInspector
+          selectedItem={selectedElement}
+          onClose={() => setSelectedElement(null)}
+          onSelectNode={handleSelectNode}
+          chain={chain}
+        />
       )}
     </DashboardShell>
   );
 }
-
